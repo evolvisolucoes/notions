@@ -1,6 +1,85 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+function NotionDatabase({ dbId, title }: { dbId: string; title: string }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDatabase = async () => {
+      try {
+        const response = await fetch('/api/get-database-content', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ database_id: dbId }),
+        });
+        const data = await response.json();
+        if (response.ok && data.rows) {
+          setRows(data.rows);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar database:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDatabase();
+  }, [dbId]); // O useEffect faz o componente buscar os dados assim que ele "nasce" na tela
+
+  if (loading) {
+    return (
+      <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg my-4 text-purple-600 animate-pulse">
+        ⏳ Carregando registros da tabela: <strong>{title}</strong>...
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg my-4 text-gray-500 text-sm">
+        🗄️ Tabela <strong>{title}</strong> está vazia.
+      </div>
+    );
+  }
+
+  // Pega as colunas da primeira linha para montar o cabeçalho
+  const colunas = Object.keys(rows[0]);
+
+  return (
+    <div className="my-6 overflow-x-auto border border-gray-200 rounded-lg shadow-sm">
+      <div className="bg-purple-600 text-white p-3 font-semibold text-sm">
+        🗄️ {title}
+      </div>
+      <table className="w-full text-left border-collapse bg-white">
+        <thead>
+          <tr className="bg-gray-100 border-b border-gray-200">
+            {colunas.map((col) => (
+              <th key={col} className="p-3 text-sm font-semibold text-gray-700">
+                {col}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr
+              key={index}
+              className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+            >
+              {colunas.map((col) => (
+                <td key={col} className="p-3 text-sm text-gray-800">
+                  {row[col] || '-'}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function Home() {
   const [formData, setFormData] = useState({
@@ -191,15 +270,11 @@ export default function Home() {
         );
       case 'child_database':
         return (
-          <div
+          <NotionDatabase
             key={block.id}
-            className="p-4 bg-purple-50 border border-purple-200 rounded-lg my-4 font-semibold text-purple-800"
-          >
-            🗄️ Tabela: {block.content}{' '}
-            <span className="text-xs font-normal text-purple-600">
-              (Leitura de banco em breve)
-            </span>
-          </div>
+            dbId={block.id}
+            title={block.content}
+          />
         );
       default:
         return (
