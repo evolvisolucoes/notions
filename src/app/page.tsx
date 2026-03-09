@@ -2,6 +2,71 @@
 
 import { useEffect, useState } from 'react';
 
+function NotionSubPage({ pageId, title }: { pageId: string; title: string }) {
+  const [blocks, setBlocks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    // Só busca os dados se a sanfona estiver aberta e ainda não tivermos os blocos
+    if (!isOpen || blocks.length > 0) return;
+
+    const fetchSubPage = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch('/api/get-page-content', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ page_id: pageId }),
+        });
+        const data = await response.json();
+        if (response.ok && data.blocks) {
+          setBlocks(data.blocks);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar sub-página:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSubPage();
+  }, [isOpen, pageId, blocks.length]);
+
+  return (
+    <div className="my-4 border border-green-300 rounded-lg overflow-hidden shadow-sm bg-white">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full text-left p-3 bg-green-50 hover:bg-green-100 font-semibold text-green-800 flex justify-between items-center transition-colors"
+      >
+        <span>📄 {title}</span>
+        <span className="text-sm">{isOpen ? '▼ Fechar' : '▶ Abrir'}</span>
+      </button>
+
+      {isOpen && (
+        <div className="p-5 border-t border-green-200">
+          {loading ? (
+            <div className="text-green-600 animate-pulse text-sm">
+              ⏳ Carregando conteúdo interno...
+            </div>
+          ) : blocks.length === 0 ? (
+            <div className="text-gray-400 text-sm italic">
+              Esta sub-página está vazia.
+            </div>
+          ) : (
+            // AQUI ESTÁ A RECURSIVIDADE: A sub-página chama o RenderBlock para desenhar seus próprios blocos
+            <div className="pl-4 border-l-2 border-green-100 flex flex-col gap-2">
+              {blocks.map((block) => (
+                <RenderBlock key={block.id} block={block} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NotionDatabase({ dbId, title }: { dbId: string; title: string }) {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,6 +144,92 @@ function NotionDatabase({ dbId, title }: { dbId: string; title: string }) {
       </table>
     </div>
   );
+}
+
+function RenderBlock({ block }: { block: any }) {
+  switch (block.type) {
+    case 'heading_1':
+      return (
+        <h1 className="text-3xl font-bold mt-6 mb-2 text-gray-900">
+          {block.content}
+        </h1>
+      );
+    case 'heading_2':
+      return (
+        <h2 className="text-2xl font-bold mt-5 mb-2 text-gray-800">
+          {block.content}
+        </h2>
+      );
+    case 'heading_3':
+      return (
+        <h3 className="text-xl font-semibold mt-4 mb-2 text-gray-700">
+          {block.content}
+        </h3>
+      );
+    case 'paragraph':
+      return (
+        <p className="mb-3 text-gray-800 leading-relaxed">
+          {block.content || <br />}
+        </p>
+      );
+    case 'bulleted_list_item':
+      return (
+        <li className="ml-6 list-disc mb-1 text-gray-800">{block.content}</li>
+      );
+    case 'numbered_list_item':
+      return (
+        <li className="ml-6 list-decimal mb-1 text-gray-800">
+          {block.content}
+        </li>
+      );
+    case 'to_do':
+      return (
+        <div className="flex items-center gap-2 mb-2">
+          <input
+            type="checkbox"
+            readOnly
+            checked={block.checked}
+            className="w-4 h-4 text-blue-600 rounded"
+          />
+          <span
+            className={
+              block.checked ? 'line-through text-gray-400' : 'text-gray-800'
+            }
+          >
+            {block.content}
+          </span>
+        </div>
+      );
+    case 'divider':
+      return <hr className="my-6 border-t border-gray-300" />;
+    case 'image':
+      return (
+        <img
+          src={block.url}
+          alt="Imagem Notion"
+          className="max-w-full rounded-lg my-4 shadow-sm border border-gray-200"
+        />
+      );
+    case 'callout':
+      return (
+        <div className="p-4 bg-blue-50 text-blue-900 border border-blue-200 rounded-lg my-4 flex gap-3">
+          <span>💡</span>
+          <span>{block.content}</span>
+        </div>
+      );
+    // 👇 A MÁGICA ACONTECE AQUI 👇
+    case 'child_database':
+      return <NotionDatabase dbId={block.id} title={block.content} />;
+    case 'child_page':
+      return <NotionSubPage pageId={block.id} title={block.content} />;
+    // ---------------------------------
+    default:
+      return (
+        <div className="text-sm text-red-500 my-2">
+          [Bloco não mapeado: {block.type}]
+        </div>
+      );
+  }
 }
 
 export default function Home() {
@@ -392,7 +543,11 @@ export default function Home() {
             </p>
           )}
 
-          <div className="notion-content">{pageBlocks.map(renderBlock)}</div>
+          <div className="notion-content">
+            {pageBlocks.map((block) => (
+              <RenderBlock key={block.id} block={block} />
+            ))}
+          </div>
         </div>
       </div>
     </main>
