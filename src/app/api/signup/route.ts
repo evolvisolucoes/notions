@@ -1,4 +1,4 @@
-import { notion } from '@/lib/notion';
+import { notion } from '@/src/lib/notion';
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
@@ -29,7 +29,11 @@ export async function POST(request: Request) {
         Nome: { title: [{ text: { content: nome } }] },
         Email: { email: email },
         Status: { status: { name: 'Pendente' } },
-        Plano: { select: { name: templateNome } },
+        // Plano: { select: { name: templateNome } },
+      },
+      template: {
+        type: 'template_id',
+        template_id: templateId,
       },
     } as any);
 
